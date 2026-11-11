@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D CMOS 2-Input NAND (NAND2) Physical Layout & Fabrication CAD Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="loading-overlay" aria-live="polite">
+    <div class="loader-card">
+      <div class="loader-ring"></div>
+      <div class="loader-title">CMOS NAND2 CAD STUDIO</div>
+      <div class="loader-sub">Synthesizing 3D Gaussian doping profiles, PDK Metal-1 &amp; Euler topology...</div>
+    </div>
+  </div>
+
+  <header id="topbar">
+    <div class="tb-brand">
+      <span class="brand-badge">NAND2</span>
+      <div class="brand-text">
+        <span class="brand-title">CMOS 2-Input NAND CAD</span>
+        <span class="brand-eq">OUT = !(A · B)</span>
+      </div>
+    </div>
+
+    <div class="tb-controls">
+      <div class="tb-group" aria-label="Input A Logic State">
+        <span class="tb-label">A =</span>
+        <div class="seg-ctrl" id="input-a-group">
+          <button type="button" class="seg-btn" data-a="0">0</button>
+          <button type="button" class="seg-btn" data-a="1">1</button>
+          <button type="button" class="seg-btn active" data-a="off">OFF</button>
+        </div>
+      </div>
+
+      <div class="tb-group" aria-label="Input B Logic State">
+        <span class="tb-label">B =</span>
+        <div class="seg-ctrl" id="input-b-group">
+          <button type="button" class="seg-btn" data-b="0">0</button>
+          <button type="button" class="seg-btn" data-b="1">1</button>
+          <button type="button" class="seg-btn active" data-b="off">OFF</button>
+        </div>
+      </div>
+
+      <div class="tb-group" aria-label="Carrier Flow Mode">
+        <div class="seg-ctrl" id="flow-mode-group">
+          <button type="button" class="seg-btn flow-current active" data-flow="current">CURRENT</button>
+          <button type="button" class="seg-btn flow-electron" data-flow="electron">ELECTRONS</button>
+        </div>
+      </div>
+
+      <div class="tb-group" aria-label="View Mode">
+        <div class="seg-ctrl" id="view-mode-group">
+          <button type="button" class="seg-btn active" id="btn-view-layout" data-view="layout">PHYSICAL LAYOUT</button>
+          <button type="button" class="seg-btn" id="btn-view-schematic" data-view="schematic">SCHEMATIC</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tb-right">
+      <button type="button" class="tb-btn" id="btn-theme" title="Toggle Dark / Light Mode">LIGHT</button>
+      <button type="button" class="tb-btn tour-btn" id="btn-build-anim" title="Launch 8-Step 3D Fabrication Tour">
+        <span class="tour-btn-inner">▶ PLAY TOUR</span>
+      </button>
+      <button type="button" class="tb-btn" id="btn-reset" title="Reset Camera, Explode, Clip &amp; State">RESET</button>
+    </div>
+  </header>
+
+  <main id="workspace">
+    <div id="canvas-wrap"></div>
+
+    <!-- Left Drawer: Architecture Tree, Visibility, Legend -->
+    <aside id="left-panel" class="drawer left-drawer" aria-label="Architecture and Layers">
+      <div class="drawer-scroll">
+        <section class="panel-sec">
+          <button type="button" class="sec-hdr" data-sec="sec-tree">
+            <span>ARCHITECTURE TREE</span>
+            <span class="sec-chevron">▾</span>
+          </button>
+          <div class="sec-body" id="sec-tree">
+            <div id="arch-tree"></div>
+          </div>
+        </section>
+
+        <section class="panel-sec">
+          <button type="button" class="sec-hdr" data-sec="sec-layers">
+            <span>LAYER VISIBILITY</span>
+            <span class="sec-chevron">▾</span>
+          </button>
+          <div class="sec-body" id="sec-layers">
+            <div class="layer-actions">
+              <button type="button" class="mini-btn" id="btn-layers-all">ALL ON</button>
+              <label class="inline-chk">
+                <input type="checkbox" id="chk-labels" checked />
+                <span>3D Labels</span>
+              </label>
+            </div>
+            <div id="layer-toggles"></div>
+          </div>
+        </section>
+
+        <section class="panel-sec">
+          <button type="button" class="sec-hdr" data-sec="sec-legend">
+            <span>LAYER LEGEND</span>
+            <span class="sec-chevron">▾</span>
+          </button>
+          <div class="sec-body" id="sec-legend">
+            <div id="legend-list"></div>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <button type="button" id="toggle-left" class="drawer-toggle left-toggle" title="Toggle Architecture Drawer">‹</button>
+
+    <!-- Right Drawer: Property Inspector & Process Node Dimensions -->
+    <aside id="right-panel" class="drawer right-drawer" aria-label="Property Inspector and Dimensions">
+      <div class="drawer-scroll">
+        <section class="panel-sec">
+          <button type="button" class="sec-hdr" data-sec="sec-inspector">
+            <span>PROPERTY INSPECTOR</span>
+            <span class="sec-chevron">▾</span>
+          </button>
+          <div class="sec-body" id="sec-inspector">
+            <div id="inspector-body">
+              <div class="empty-inspector">
+                Click any 3D layer, diffusion, gate, contact, or Metal-1 trace (or switch to Schematic) to inspect physical properties and λ design rules.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-sec">
+          <button type="button" class="sec-hdr" data-sec="sec-dims">
+            <span>MEAD-CONWAY λ RULES</span>
+            <span class="sec-chevron">▾</span>
+          </button>
+          <div class="sec-body" id="sec-dims">
+            <div class="node-presets" id="lambda-presets"></div>
+            <div id="lambda-summary" class="lambda-summary"></div>
+            <div id="dim-table"></div>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <button type="button" id="toggle-right" class="drawer-toggle right-toggle" title="Toggle Inspector Drawer">›</button>
+
+    <!-- Bottom-Left Live Truth Table & Transistor Status HUD -->
+    <div id="state-badge" class="hud-card state-badge">
+      <div class="hud-title-row">
+        <span class="hud-kicker">LIVE NAND2 STATUS</span>
+        <span class="hud-dot" id="state-dot"></span>
+      </div>
+      <div id="state-rows" class="state-rows"></div>
+      <div id="state-banner" class="state-banner"></div>
+      <div class="state-disclaimer">Idealized static DC conduction &amp; carrier flow model</div>
+    </div>
+
+    <!-- Bottom-Right Explode & Section Scrub HUD -->
+    <div id="view-hud" class="hud-card view-hud">
+      <div class="view-hud-hdr">
+        <span class="hud-kicker">EXPLODE &amp; SECTION SCRUB</span>
+        <button type="button" class="hud-collapse-btn" id="btn-hud-collapse" title="Collapse/Expand Controls">▾</button>
+      </div>
+      <div id="view-hud-body" class="view-hud-body">
+        <div class="hud-subgrp">
+          <div class="hud-subhdr">EXPLODE AXES</div>
+          <div class="slider-row">
+            <label for="explode-x">X</label>
+            <input type="range" id="explode-x" min="0" max="100" step="1" value="0" />
+            <span class="val-readout" id="val-explode-x">0%</span>
+          </div>
+          <div class="slider-row">
+            <label for="explode-y">Y</label>
+            <input type="range" id="explode-y" min="0" max="100" step="1" value="1" />
+            <span class="val-readout" id="val-explode-y">1%</span>
+          </div>
+          <div class="slider-row">
+            <label for="explode-z">Z</label>
+            <input type="range" id="explode-z" min="0" max="100" step="1" value="0" />
+            <span class="val-readout" id="val-explode-z">0%</span>
+          </div>
+        </div>
+        <div class="hud-subgrp">
+          <div class="hud-subhdr">SCRUB SECTION PLANES</div>
+          <div class="slider-row">
+            <label for="clip-x">X</label>
+            <input type="range" id="clip-x" min="-20" max="25" step="0.2" value="25" />
+            <span class="val-readout" id="val-clip-x">OFF</span>
+          </div>
+          <div class="slider-row">
+            <label for="clip-y">Y</label>
+            <input type="range" id="clip-y" min="0" max="30" step="0.2" value="30" />
+            <span class="val-readout" id="val-clip-y">OFF</span>
+          </div>
+          <div class="slider-row">
+            <label for="clip-z">Z</label>
+            <input type="range" id="clip-z" min="-18" max="18" step="0.2" value="18" />
+            <span class="val-readout" id="val-clip-z">OFF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D-Anchored Selection Popover -->
+    <div id="popover" class="popover hidden" role="dialog" aria-label="Selected Component">
+      <div class="pop-hdr">
+        <span class="pop-layer" id="pop-layer">LAYER</span>
+        <button type="button" class="pop-close" id="pop-close" title="Clear Selection">×</button>
+      </div>
+      <div class="pop-title" id="pop-title">Component</div>
+      <div class="pop-role" id="pop-role"></div>
+      <div class="pop-dim" id="pop-dim"></div>
+    </div>
+
+    <!-- 8-Step Fabrication Tour Banner -->
+    <div id="tour-hud" class="tour-hud hidden">
+      <div class="tour-top">
+        <span class="tour-step-pill" id="tour-step-pill">STEP 1 / 8</span>
+        <span class="tour-title" id="tour-title">P-Substrate Wafer</span>
+        <button type="button" class="tour-stop-btn" id="tour-stop-btn">STOP TOUR</button>
+      </div>
+      <div class="tour-script" id="tour-script"></div>
+      <div class="tour-progress-track">
+        <div class="tour-progress-bar" id="tour-progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- Interactive 2D Schematic Overlay -->
+    <div id="schematic-overlay" class="schematic-overlay hidden">
+      <div class="sch-card">
+        <div class="sch-hdr">
+          <div>
+            <div class="sch-title">CMOS 2-INPUT NAND SCHEMATIC (OUT = !(A · B))</div>
+            <div class="sch-sub">Click any transistor, node, gate, or rail to cross-probe in 3D Layout</div>
+          </div>
+          <div class="sch-hdr-btns">
+            <button type="button" class="mini-btn" id="sch-btn-reset">RESET</button>
+            <button type="button" class="mini-btn accent" id="sch-btn-layout">3D LAYOUT</button>
+          </div>
+        </div>
+
+        <svg id="nand2-schematic-svg" viewBox="0 0 460 500" xmlns="http://www.w3.org/2000/svg">
+          <!-- VDD Rail -->
+          <g class="sch-el" data-id="vddRail">
+            <line x1="70" y1="44" x2="350" y2="44" class="sch-rail sch-vdd" />
+            <line x1="145" y1="44" x2="145" y2="76" class="sch-wire sch-vdd" />
+            <line x1="285" y1="44" x2="285" y2="76" class="sch-wire sch-vdd" />
+            <circle cx="145" cy="44" r="4" class="sch-dot" />
+            <circle cx="285" cy="44" r="4" class="sch-dot" />
+            <text x="210" y="28" text-anchor="middle" class="sch-lbl sch-lbl-vdd">VDD</text>
+          </g>
+
+          <!-- Parallel PMOS Pull-Up Network -->
+          <!-- MP1 (Left PMOS, Gate A) -->
+          <g class="sch-el" data-id="pmosASrc">
+            <line x1="145" y1="76" x2="145" y2="104" class="sch-wire" />
+            <line x1="145" y1="104" x2="122" y2="104" class="sch-wire" />
+          </g>
+          <g class="sch-el" data-id="pmosA">
+            <rect x="78" y="96" width="84" height="72" rx="8" class="sch-hit" />
+            <line x1="122" y1="104" x2="122" y2="156" class="sch-ch" />
+            <line x1="112" y1="108" x2="112" y2="152" class="sch-gate" />
+            <circle cx="104" cy="130" r="6" class="sch-bubble" />
+            <line x1="122" y1="156" x2="145" y2="156" class="sch-wire" />
+            <text x="156" y="128" class="sch-dev">MP1</text>
+            <text x="156" y="143" class="sch-dev-sub" id="sch-mp1-state">PMOS A</text>
+          </g>
+
+          <!-- MP2 (Right PMOS, Gate B) -->
+          <g class="sch-el" data-id="pmosBSrc">
+            <line x1="285" y1="76" x2="285" y2="104" class="sch-wire" />
+            <line x1="285" y1="104" x2="262" y2="104" class="sch-wire" />
+          </g>
+          <g class="sch-el" data-id="pmosB">
+            <rect x="218" y="96" width="84" height="72" rx="8" class="sch-hit" />
+            <line x1="262" y1="104" x2="262" y2="156" class="sch-ch" />
+            <line x1="252" y1="108" x2="252" y2="152" class="sch-gate" />
+            <circle cx="244" cy="130" r="6" class="sch-bubble" />
+            <line x1="262" y1="156" x2="285" y2="156" class="sch-wire" />
+            <text x="296" y="128" class="sch-dev">MP2</text>
+            <text x="296" y="143" class="sch-dev-sub" id="sch-mp2-state">PMOS B</text>
+          </g>
+
+          <!-- Shared PMOS Drain & OUT Bus -->
+          <g class="sch-el" data-id="pmosSharedDrn">
+            <line x1="145" y1="156" x2="145" y2="210" class="sch-wire" />
+            <line x1="285" y1="156" x2="285" y2="210" class="sch-wire" />
+            <line x1="145" y1="210" x2="285" y2="210" class="sch-wire" />
+            <circle cx="215" cy="210" r="5" class="sch-dot" />
+          </g>
+          <g class="sch-el" data-id="outPin">
+            <line x1="215" y1="210" x2="390" y2="210" class="sch-rail sch-out" />
+            <circle cx="390" cy="210" r="5" class="sch-pin-dot" />
+            <text x="404" y="206" class="sch-lbl sch-lbl-out">OUT</text>
+            <text x="404" y="224" class="sch-state-txt" id="sch-out-state">HIGH-Z</text>
+          </g>
+
+          <!-- Series NMOS Pull-Down Network -->
+          <!-- MN2 Drain from OUT -->
+          <g class="sch-el" data-id="nmosBDrn">
+            <line x1="215" y1="210" x2="215" y2="250" class="sch-wire" />
+          </g>
+
+          <!-- MN2 (Top NMOS, Gate B) -->
+          <g class="sch-el" data-id="nmosB">
+            <rect x="166" y="242" width="100" height="70" rx="8" class="sch-hit" />
+            <line x1="215" y1="250" x2="200" y2="250" class="sch-wire" />
+            <line x1="200" y1="250" x2="200" y2="302" class="sch-ch" />
+            <line x1="190" y1="254" x2="190" y2="298" class="sch-gate" />
+            <line x1="200" y1="302" x2="215" y2="302" class="sch-wire" />
+            <text x="228" y="274" class="sch-dev">MN2</text>
+            <text x="228" y="289" class="sch-dev-sub" id="sch-mn2-state">NMOS B</text>
+          </g>
+
+          <!-- Series Internal N+ Node -->
+          <g class="sch-el" data-id="nmosMidNode">
+            <line x1="215" y1="302" x2="215" y2="346" class="sch-wire" />
+            <circle cx="215" cy="324" r="5" class="sch-dot sch-mid-dot" />
+            <text x="232" y="328" class="sch-node-lbl">SERIES N+ NODE</text>
+          </g>
+
+          <!-- MN1 (Bottom NMOS, Gate A) -->
+          <g class="sch-el" data-id="nmosA">
+            <rect x="166" y="338" width="100" height="70" rx="8" class="sch-hit" />
+            <line x1="215" y1="346" x2="200" y2="346" class="sch-wire" />
+            <line x1="200" y1="346" x2="200" y2="398" class="sch-ch" />
+            <line x1="190" y1="350" x2="190" y2="394" class="sch-gate" />
+            <line x1="200" y1="398" x2="215" y2="398" class="sch-wire" />
+            <text x="228" y="370" class="sch-dev">MN1</text>
+            <text x="228" y="385" class="sch-dev-sub" id="sch-mn1-state">NMOS A</text>
+          </g>
+
+          <!-- MN1 Source to GND -->
+          <g class="sch-el" data-id="nmosASrc">
+            <line x1="215" y1="398" x2="215" y2="438" class="sch-wire" />
+          </g>
+
+          <!-- GND Rail -->
+          <g class="sch-el" data-id="gndRail">
+            <line x1="185" y1="438" x2="245" y2="438" class="sch-rail sch-gnd" />
+            <line x1="195" y1="446" x2="235" y2="446" class="sch-rail sch-gnd" />
+            <line x1="205" y1="454" x2="225" y2="454" class="sch-rail sch-gnd" />
+            <text x="215" y="476" text-anchor="middle" class="sch-lbl sch-lbl-gnd">GND</text>
+          </g>
+
+          <!-- Input A Routing to MP1 & MN1 -->
+          <g class="sch-el" data-id="inAPin">
+            <circle cx="34" cy="130" r="5" class="sch-pin-dot" />
+            <line x1="34" y1="130" x2="98" y2="130" class="sch-wire sch-in" />
+            <line x1="56" y1="130" x2="56" y2="372" class="sch-wire sch-in" />
+            <line x1="56" y1="372" x2="190" y2="372" class="sch-wire sch-in" />
+            <circle cx="56" cy="130" r="4" class="sch-dot" />
+            <text x="16" y="135" class="sch-lbl">A</text>
+            <text x="16" y="150" class="sch-state-txt" id="sch-a-state">OFF</text>
+          </g>
+
+          <!-- Input B Routing to MP2 & MN2 -->
+          <g class="sch-el" data-id="inBPin">
+            <circle cx="34" cy="274" r="5" class="sch-pin-dot" />
+            <line x1="34" y1="274" x2="190" y2="274" class="sch-wire sch-in" />
+            <line x1="176" y1="274" x2="176" y2="180" class="sch-wire sch-in" />
+            <line x1="176" y1="180" x2="226" y2="180" class="sch-wire sch-in" />
+            <line x1="226" y1="180" x2="226" y2="130" class="sch-wire sch-in" />
+            <line x1="226" y1="130" x2="238" y2="130" class="sch-wire sch-in" />
+            <circle cx="176" cy="274" r="4" class="sch-dot" />
+            <text x="16" y="279" class="sch-lbl">B</text>
+            <text x="16" y="294" class="sch-state-txt" id="sch-b-state">OFF</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Sarvam AI Voice Tutor Floating Launcher & Glassmorphic Widget -->
+    <button type="button" id="va-launcher-btn" class="va-launcher-btn" title="Open Sarvam AI VLSI Voice Tutor" aria-label="Open AI Voice Tutor">
+      <span class="va-fab-ring"></span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+      </svg>
+    </button>
+
+    <section id="voice-assistant-widget" class="va-widget hidden" aria-label="Sarvam AI Voice Tutor">
+      <div class="va-hdr">
+        <div class="va-title-wrap">
+          <span class="va-badge">SARVAM BULBUL v4</span>
+          <span class="va-title">NAND2 Voice Tutor</span>
+        </div>
+        <div class="va-waveform" id="va-waveform" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="va-hdr-actions">
+          <button type="button" class="va-icon-btn" id="va-btn-key" title="Configure Sarvam API Key">🔑</button>
+          <button type="button" class="va-icon-btn" id="va-btn-close" title="Minimize Voice Tutor">✕</button>
+        </div>
+      </div>
+
+      <div class="va-selectors">
+        <select id="va-lang" aria-label="Tutor Language">
+          <option value="en-IN">English (IN)</option>
+          <option value="hi-IN">हिन्दी (HI)</option>
+          <option value="te-IN">తెలుగు (TE)</option>
+        </select>
+        <select id="va-persona" aria-label="Tutor Voice Persona">
+          <option value="aparna_en_edtech">Aparna · EdTech (EN)</option>
+          <option value="aparna_en_companion">Aparna · Companion (EN)</option>
+          <option value="aparna_hi_customer">Aparna · Tutor (HI)</option>
+          <option value="shubh_hi_customer">Shubh · Tutor (HI)</option>
+          <option value="ritu_hi_customer">Ritu · Tutor (HI)</option>
+          <option value="kavitha_te_narration">Kavitha · Narration (TE)</option>
+        </select>
+      </div>
+
+      <div class="va-context-bar" id="va-context-bar">
+        Selected: None · A=OFF B=OFF → OUT=HIGH-Z
+      </div>
+
+      <div class="va-chips" id="va-chips">
+        <button type="button" class="va-chip" data-prompt="Explain Selected">Explain Selected</button>
+        <button type="button" class="va-chip" data-prompt="Why parallel PMOS?">Why parallel PMOS?</button>
+        <button type="button" class="va-chip" data-prompt="Why series NMOS?">Why series NMOS?</button>
+        <button type="button" class="va-chip" data-prompt="How NAND2 switches">How NAND2 switches</button>
+        <button type="button" class="va-chip" data-prompt="SDE / LDD role">SDE / LDD role</button>
+      </div>
+
+      <div class="va-messages" id="va-messages">
+        <div class="va-msg assistant">
+          Ask me about any 3D layer, Mead-Conway λ rule, parallel PMOS pull-up, or series NMOS pull-down in this CMOS NAND2 gate.
+        </div>
+      </div>
+
+      <div class="va-status-line" id="va-status-line">Ready</div>
+
+      <div class="va-input-row">
+        <button type="button" class="va-mic-btn" id="va-btn-mic" title="Voice Input (Web Speech STT)">🎙</button>
+        <input type="text" id="va-input" placeholder="Ask about NAND2 layout or physics..." />
+        <button type="button" class="va-stop-btn hidden" id="va-btn-stop-audio" title="Stop Audio">■</button>
+        <button type="button" class="va-send-btn" id="va-btn-send" title="Send Question">➤</button>
+      </div>
+    </section>
+
+    <!-- Sarvam API Key Setup & Privacy Modal -->
+    <div id="va-key-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="va-modal-title">
+      <div class="modal-card">
+        <h3 id="va-modal-title">Sarvam AI API Key Configuration</h3>
+        <p class="modal-desc">
+          Enter your Sarvam AI subscription key for <strong>sarvam-105b-conversations</strong> and <strong>bulbul:v4-flash</strong> streaming audio. Your key stays on this device (`localStorage`) and is only sent to Sarvam AI via `/api/voice-assistant` or direct HTTPS.
+        </p>
+        <input type="password" id="va-key-input" placeholder="Paste Sarvam API key (api-subscription-key)..." autocomplete="off" />
+        <label class="modal-chk">
+          <input type="checkbox" id="va-key-session-only" />
+          <span>Session-only (clear automatically when tab closes)</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="mini-btn" id="va-key-clear">CLEAR KEY</button>
+          <div class="modal-actions-right">
+            <button type="button" class="mini-btn" id="va-key-cancel">CANCEL</button>
+            <button type="button" class="mini-btn accent" id="va-key-save">SAVE KEY</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="footer">
+    <a class="footer-link footer-author" href="https://raydurg-anish-portfolio-amta50oot-anish609609s-projects.vercel.app/" target="_blank" rel="noopener noreferrer">
+      <span class="footer-monogram" aria-hidden="true">RA</span>
+      <span>Developed by Raydurg Anish</span>
+    </a>
+    <span class="footer-sep" aria-hidden="true">·</span>
+    <a class="footer-link" href="https://github.com/anish609609/cmos_nand_cad" target="_blank" rel="noopener noreferrer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+      </svg>
+      <span>GitHub</span>
+    </a>
+  </footer>
+
+  <!-- Classic scripts in exact load order so globals resolve over file:// or HTTP -->
+  <script src="js/data.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/geometry.js"></script>
+  <script src="js/ui-panels.js"></script>
+  <script src="js/selection.js"></script>
+  <script src="js/controls-explode-scrub.js"></script>
+  <script src="js/dimensions.js"></script>
+  <script src="js/view-mode.js"></script>
+  <script src="js/flow.js"></script>
+  <script src="js/logic-state.js"></script>
+  <script src="js/build-anim.js"></script>
+  <script src="js/render-loop.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/voice-assistant.js"></script>
+</body>
+</html>

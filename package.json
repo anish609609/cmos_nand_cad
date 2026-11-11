@@ -1,0 +1,22 @@
+{
+  "name": "cmos-nand2-cad",
+  "version": "1.0.0",
+  "description": "Interactive 3D Physical CMOS 2-Input NAND Gate Layout Viewer with Sarvam AI Voice Assistant",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "cmos",
+    "nand2",
+    "cad",
+    "vlsi",
+    "threejs",
+    "sarvam-ai",
+    "voice-assistant",
+    "bulbul"
+  ],
+  "author": "Raydurg Anish",
+  "license": "MIT"
+}
